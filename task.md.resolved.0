@@ -1,0 +1,6 @@
+# Task: Create LoRA Adapter Training Guide
+
+- [ ] Explore user context (`main.py`) <!-- id: 0 -->
+- [ ] Create `lora_guide.md` artifact explaining the process <!-- id: 1 -->
+- [ ] Create `train_lora.py` example script in scratch directory <!-- id: 2 -->
+- [ ] Verify necessary libraries are mentioned/installed <!-- id: 3 -->
