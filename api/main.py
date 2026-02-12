@@ -2,6 +2,9 @@ import gradio as gr
 import pandas as pd
 import sys
 import os
+import socket
+import subprocess
+
 
 # Add the parent directory to sys.path to allow imports from app
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -13,7 +16,11 @@ from app.vectorstore.chroma_client import setup_vectorstore
 from app.llm.ollama_client import get_llm
 from app.rag.retriever import get_retriever
 from app.rag.chain import create_rag_chain, get_generation_chain, format_docs
+from app.lora.lora_manager import process_file_for_lora
 import time
+
+# Ensure logs directory exists for safety
+os.makedirs("logs", exist_ok=True)
 
 def process_and_ask(file_obj, question):
     """
@@ -101,10 +108,24 @@ def process_and_ask(file_obj, question):
             "Time (ms)": [round(ingestion_time, 2), round(retrieval_time, 2), round(generation_time, 2)]
         })
         
-        return answer, citations, df_embeddings, df_latency
+        # --- LoRA Training Trigger ---
+        lora_status = "No file uploaded."
+        lora_data = pd.DataFrame()
+        
+        if file_obj:
+            try:
+                # Run LoRA processing (Generation + Training)
+                # NOTE: This is a blocking call and might take time.
+                # In a production app, this should be offloaded to a background task (e.g., Celery/Redis Queue).
+                lora_status, lora_data = process_file_for_lora(file_obj.name)
+            except Exception as lora_e:
+                lora_status = f"LoRA Training Error: {str(lora_e)}"
+                print(f"LoRA Error: {lora_e}")
+
+        return answer, citations, df_embeddings, df_latency, lora_status, lora_data
 
     except Exception as e:
-        return f"Error occurred: {str(e)}", "Error", pd.DataFrame(), pd.DataFrame()
+        return f"Error occurred: {str(e)}", "Error", pd.DataFrame(), pd.DataFrame(), f"Error: {str(e)}", pd.DataFrame()
 
 # Gradio Blocks Interface
 with gr.Blocks(title="Ollama RAG Q&A with Documents") as demo:
@@ -146,13 +167,72 @@ with gr.Blocks(title="Ollama RAG Q&A with Documents") as demo:
         headers=["Stage", "Time (ms)"],
         interactive=False
     )
+    
+    gr.Markdown("## LoRA Adapter Training")
+    with gr.Row():
+        lora_status_output = gr.Textbox(label="Training Status", lines=2)
+    
+    gr.Markdown("### Training Data Preview (New Entries)")
+    lora_data_output = gr.Dataframe(
+        label="Generated Training Data",
+        headers=["instruction", "input", "output", "Extracted Entities"],
+        wrap=True,
+        interactive=False
+    )
 
     # Event Listener
     submit_btn.click(
         fn=process_and_ask,
         inputs=[file_input, question_input],
-        outputs=[answer_output, citations_output, embeddings_output, latency_output]
+        outputs=[answer_output, citations_output, embeddings_output, latency_output, lora_status_output, lora_data_output]
     )
 
+
+
+def check_ollama_service():
+    """
+    Checks if Ollama service is running on default port 11434.
+    If not, attempts to start it.
+    """
+    print("Checking Ollama service status...")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', 11434))
+    sock.close()
+    
+    if result == 0:
+        print("Ollama service is already running.")
+        return True
+    
+    print("Ollama service not found. Attempting to start...")
+    try:
+        # Start Ollama in the background
+        # Adjust command based on OS if necessary, but 'ollama serve' is standard
+        subprocess.Popen(["ollama", "serve"], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        # Wait for it to start
+        print("Waiting for Ollama to initialize...")
+        for _ in range(10):  # Wait up to 10 seconds
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', 11434))
+            sock.close()
+            if result == 0:
+                print("Ollama service started successfully.")
+                return True
+            time.sleep(1)
+            
+        print("Timed out waiting for Ollama to start.")
+        return False
+        
+    except FileNotFoundError:
+        print("Error: 'ollama' command not found. Please ensure Ollama is installed and in your PATH.")
+        return False
+    except Exception as e:
+        print(f"Error starting Ollama: {e}")
+        return False
+
 if __name__ == "__main__":
-    demo.launch()
+    if check_ollama_service():
+        demo.launch()
+    else:
+        print("Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download")
+
