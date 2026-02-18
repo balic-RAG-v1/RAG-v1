@@ -72,5 +72,20 @@
         "instruction": "What is the purpose of the Rule Change Code review and testing process?",
         "input": "",
         "output": "Rule changes do not trigger software releases; no-code authoring + approval"
+    },
+    {
+        "instruction": "What is the primary goal of the Low-Level Design (LLD) document?",
+        "input": "",
+        "output": "The primary goal is to translate the approved High-Level Design into engineering specifications suitable for direct implementation by development teams."
+    },
+    {
+        "instruction": "What are some key deliverables included in the LLD document?",
+        "input": "component-wise architecture, API contracts, logical data models, and more",
+        "output": "The document provides detailed technical specifications for 11 core components, comprehensive API contracts, logical data models with indexes, security architecture, performance optimization strategies, and extensibility patterns."
+    },
+    {
+        "instruction": "What is the target audience for this LLD document?",
+        "input": "",
+        "output": "The target audience includes engineering teams, security reviewers, compliance validators, product managers"
     }
 ]

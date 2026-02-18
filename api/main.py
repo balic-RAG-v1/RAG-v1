@@ -56,10 +56,18 @@ def process_and_ask(file_obj, question):
         if file_obj:
             search_kwargs["filter"] = {"source": file_obj.name}
         
+        # Determine if we should retrieve at all
+        # If no file is uploaded, we search the whole DB. 
+        # If DB is empty or has no relevant info, the Prompt handles the fallback.
+        
         retriever = get_retriever(vectorstore, search_kwargs=search_kwargs)
         
         # Invoke retriever manually to time it
-        context_docs = retriever.invoke(question)
+        try:
+            context_docs = retriever.invoke(question)
+        except Exception as ret_err:
+             print(f"Retrieval Error: {ret_err}")
+             context_docs = []
         
         retrieval_time = (time.time() - start_retrieval) * 1000
         # --- TIMER END: Retrieval ---
@@ -230,9 +238,22 @@ def check_ollama_service():
         print(f"Error starting Ollama: {e}")
         return False
 
+def check_dependencies():
+    """
+    Checks for critical dependencies that might be missing.
+    """
+    try:
+        import tiktoken
+        print("'tiktoken' found.")
+    except ImportError:
+        print("Error: 'tiktoken' module not found. It is required for text processing.")
+        print("Please run: pip install tiktoken")
+        return False
+    return True
+
 if __name__ == "__main__":
-    if check_ollama_service():
+    if check_dependencies() and check_ollama_service():
         demo.launch()
     else:
-        print("Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download")
+        print("Startup checks failed. Please resolve the issues above.")
 

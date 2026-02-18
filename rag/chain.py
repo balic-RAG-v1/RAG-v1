@@ -3,6 +3,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 def format_docs(docs):
+    if not docs:
+         return "NO_RELEVANT_CONTEXT_FOUND"
     return "\n\n".join(doc.page_content for doc in docs)
 
 import os

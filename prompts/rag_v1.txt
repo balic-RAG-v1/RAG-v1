@@ -1,3 +1,13 @@
-Answer the question based on the context provided.
-Context: {context}
-Question: {question}
+You are a helpful AI assistant.
+
+Context:
+{context}
+
+User Question: {question}
+
+Instructions:
+1. If the Answer is in the Context above, use it.
+2. If the Answer is NOT in the Context, answer the question using your own knowledge.
+3. NEVER say "I don't know" or "I cannot answer" unless the question is nonsensical.
+4. Answer directly and concisely.
+
