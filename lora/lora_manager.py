@@ -142,13 +142,14 @@ def train_model():
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.float16,
         bnb_4bit_use_double_quant=True,
+        llm_int8_enable_fp32_cpu_offload=True # Enables CPU offloading for quantized weights when VRAM is full
     )
     
     try:
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map={"": "cpu"}, # Force map offload layers explicitly
             trust_remote_code=True
         )
         
@@ -171,9 +172,20 @@ def train_model():
         
         if not os.path.exists(DATASET_FILE):
             print("No dataset found. Skipping training.")
-            return "No dataset found."
+            return "No dataset found.", pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
             
         dataset = load_dataset("json", data_files=DATASET_FILE, split="train")
+        
+        # Split dataset if we have enough data to ensure at least 1 eval example
+        if len(dataset) > 4:
+            split = dataset.train_test_split(test_size=0.2, seed=42)
+            train_dataset = split["train"]
+            eval_dataset = split["test"]
+            do_eval = True
+        else:
+            train_dataset = dataset
+            eval_dataset = None
+            do_eval = False
         
         training_args = TrainingArguments(
             output_dir=OUTPUT_DIR,
@@ -182,7 +194,7 @@ def train_model():
             gradient_accumulation_steps=4,
             optim="paged_adamw_32bit",
             save_steps=25,
-            logging_steps=5,
+            logging_steps=1, # Granular logging for UI updates
             learning_rate=2e-4,
             weight_decay=0.001,
             fp16=False,
@@ -192,12 +204,15 @@ def train_model():
             warmup_ratio=0.03,
             group_by_length=True,
             lr_scheduler_type="constant",
-            report_to="none"
+            report_to="none",
+            eval_strategy="steps" if do_eval else "no",
+            eval_steps=5 if do_eval else None
         )
         
         trainer = SFTTrainer(
             model=model,
-            train_dataset=dataset,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             peft_config=peft_config,
             dataset_text_field="output", # Using 'output' or formatting to text would be better, but standard is text column
             # For simplicity, we assume dataset has 'text' field or we format it. 
@@ -214,11 +229,23 @@ def train_model():
         trainer.model.save_pretrained(OUTPUT_DIR)
         tokenizer.save_pretrained(OUTPUT_DIR)
         
-        return "Training completed successfully."
+        # Extract and format metrics for visualization
+        history = trainer.state.log_history
+        metrics_data = []
+        for log in history:
+            step = log.get("step")
+            if "loss" in log:
+                metrics_data.append({"Step": step, "Loss": log["loss"], "Metric Type": "Train Loss"})
+            if "eval_loss" in log:
+                metrics_data.append({"Step": step, "Loss": log["eval_loss"], "Metric Type": "Validation Loss"})
+                
+        metrics_df = pd.DataFrame(metrics_data) if metrics_data else pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
+        
+        return "Training completed successfully.", metrics_df
         
     except Exception as e:
         print(f"Training failed: {e}")
-        return f"Training failed: {str(e)}"
+        return f"Training failed: {str(e)}", pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
 
 def process_file_for_lora(file_path):
     """
@@ -232,7 +259,7 @@ def process_file_for_lora(file_path):
     file_name = os.path.basename(file_path)
     
     if is_file_processed(file_hash):
-        return "File already processed. Skipping training.", pd.DataFrame()
+        return "File already processed. Skipping training.", pd.DataFrame(), pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
     
     # Load content
     docs = load_file(file_path)
@@ -258,6 +285,21 @@ def process_file_for_lora(file_path):
              df_preview.at[0, "Extracted Entities"] = ", ".join(generated_data["entities"])
     
     # Trigger Training
-    training_status = train_model()
+    training_status, df_metrics = train_model()
     
-    return training_status, df_preview
+    return training_status, df_preview, df_metrics
+
+import shutil
+
+def clear_lora_data():
+    """Clears all LoRA datasets, logs, and adapter files."""
+    try:
+        if os.path.exists(DATASET_FILE):
+            os.remove(DATASET_FILE)
+        if os.path.exists(PROCESSED_FILES_LOG):
+            os.remove(PROCESSED_FILES_LOG)
+        if os.path.exists(OUTPUT_DIR):
+            shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+        return True, "LoRA data cleared successfully."
+    except Exception as e:
+        return False, f"Error clearing LoRA data: {e}"

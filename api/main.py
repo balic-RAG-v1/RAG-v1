@@ -12,11 +12,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from app.ingestion.loader import load_file
 from app.ingestion.chunker import chunk_documents
 from app.ingestion.embeddings import get_embedding_model
-from app.vectorstore.chroma_client import setup_vectorstore
+from app.vectorstore.chroma_client import setup_vectorstore, clear_vectorstore
 from app.llm.ollama_client import get_llm
 from app.rag.retriever import get_retriever
 from app.rag.chain import create_rag_chain, get_generation_chain, format_docs
-from app.lora.lora_manager import process_file_for_lora
+from app.lora.lora_manager import process_file_for_lora, clear_lora_data
 import time
 
 # Ensure logs directory exists for safety
@@ -34,7 +34,7 @@ def process_and_ask(file_obj, question):
         
         # 1. Ingestion Layer
         docs_splits = []
-        if file_obj:
+        if file_obj is not None:
             docs = load_file(file_obj.name)
             docs_splits = chunk_documents(docs)
         
@@ -53,7 +53,7 @@ def process_and_ask(file_obj, question):
         # Define search params: MMR + Metadata Filter
         search_kwargs = {"k": 5, "fetch_k": 20}
         
-        if file_obj:
+        if file_obj is not None:
             search_kwargs["filter"] = {"source": file_obj.name}
         
         # Determine if we should retrieve at all
@@ -99,15 +99,23 @@ def process_and_ask(file_obj, question):
 
         # Extract Embeddings (Visualization)
         get_kwargs = {'include': ['embeddings', 'documents']}
-        if file_obj:
+        if file_obj is not None:
              get_kwargs['where'] = {"source": file_obj.name}
              
         data = vectorstore.get(**get_kwargs)
         
+        embeddings = data.get('embeddings')
+        if embeddings is None:
+            embeddings = []
+            
+        documents = data.get('documents')
+        if documents is None:
+            documents = []
+        
         # Create Embeddings DataFrame
         df_embeddings = pd.DataFrame({
-            "Text Chunk": data['documents'],
-            "Embedding Vector": [str(list(emb)) for emb in data['embeddings']] 
+            "Text Chunk": documents,
+            "Embedding Vector": [str(list(emb)) for emb in embeddings] 
         })
         
         # Create Latency DataFrame
@@ -119,21 +127,33 @@ def process_and_ask(file_obj, question):
         # --- LoRA Training Trigger ---
         lora_status = "No file uploaded."
         lora_data = pd.DataFrame()
+        lora_metrics = pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
         
-        if file_obj:
+        if file_obj is not None:
             try:
                 # Run LoRA processing (Generation + Training)
                 # NOTE: This is a blocking call and might take time.
                 # In a production app, this should be offloaded to a background task (e.g., Celery/Redis Queue).
-                lora_status, lora_data = process_file_for_lora(file_obj.name)
+                lora_status, lora_data, lora_metrics = process_file_for_lora(file_obj.name)
             except Exception as lora_e:
                 lora_status = f"LoRA Training Error: {str(lora_e)}"
                 print(f"LoRA Error: {lora_e}")
 
-        return answer, citations, df_embeddings, df_latency, lora_status, lora_data
+        return answer, citations, df_embeddings, df_latency, lora_status, lora_data, lora_metrics
 
     except Exception as e:
-        return f"Error occurred: {str(e)}", "Error", pd.DataFrame(), pd.DataFrame(), f"Error: {str(e)}", pd.DataFrame()
+        import traceback
+        traceback.print_exc()
+        print(f"DEBUG: file_obj type is {type(file_obj)}")
+        return f"Error occurred: {str(e)}", "Error", pd.DataFrame(), pd.DataFrame(), f"Error: {str(e)}", pd.DataFrame(), pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
+
+def clear_all_data():
+    """Clears embeddings and LoRA data."""
+    v_success, v_msg = clear_vectorstore()
+    l_success, l_msg = clear_lora_data()
+    
+    status = f"Vector DB: {v_msg}\nLoRA: {l_msg}"
+    return "", "", pd.DataFrame(), pd.DataFrame(), status, pd.DataFrame(), pd.DataFrame(columns=["Step", "Loss", "Metric Type"])
 
 # Gradio Blocks Interface
 with gr.Blocks(title="Ollama RAG Q&A with Documents") as demo:
@@ -153,7 +173,9 @@ with gr.Blocks(title="Ollama RAG Q&A with Documents") as demo:
             lines=2
         )
         
-    submit_btn = gr.Button("Submit Query", variant="primary")
+    with gr.Row():
+        submit_btn = gr.Button("Submit Query", variant="primary")
+        clear_btn = gr.Button("Clear All Data", variant="stop")
     
     gr.Markdown("### Answer")
     answer_output = gr.Textbox(label="Generated Answer", lines=5, show_label=False)
@@ -180,19 +202,39 @@ with gr.Blocks(title="Ollama RAG Q&A with Documents") as demo:
     with gr.Row():
         lora_status_output = gr.Textbox(label="Training Status", lines=2)
     
-    gr.Markdown("### Training Data Preview (New Entries)")
-    lora_data_output = gr.Dataframe(
-        label="Generated Training Data",
-        headers=["instruction", "input", "output", "Extracted Entities"],
-        wrap=True,
-        interactive=False
-    )
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### Training Data Preview (New Entries)")
+            lora_data_output = gr.Dataframe(
+                label="Generated Training Data",
+                headers=["instruction", "input", "output", "Extracted Entities"],
+                wrap=True,
+                interactive=False
+            )
+        with gr.Column(scale=1):
+            gr.Markdown("### LoRA Analytics Dashboard")
+            lora_metrics_plot = gr.LinePlot(
+                x="Step",
+                y="Loss",
+                color="Metric Type",
+                title="Training vs Validation Loss",
+                tooltip=["Step", "Loss", "Metric Type"],
+                x_title="Training Steps",
+                y_title="Loss",
+                container=True
+            )
 
     # Event Listener
     submit_btn.click(
         fn=process_and_ask,
         inputs=[file_input, question_input],
-        outputs=[answer_output, citations_output, embeddings_output, latency_output, lora_status_output, lora_data_output]
+        outputs=[answer_output, citations_output, embeddings_output, latency_output, lora_status_output, lora_data_output, lora_metrics_plot]
+    )
+
+    clear_btn.click(
+        fn=clear_all_data,
+        inputs=[],
+        outputs=[answer_output, citations_output, embeddings_output, latency_output, lora_status_output, lora_data_output, lora_metrics_plot]
     )
 
 
@@ -253,7 +295,7 @@ def check_dependencies():
 
 if __name__ == "__main__":
     if check_dependencies() and check_ollama_service():
-        demo.launch()
+        demo.launch(server_name="127.0.0.1")
     else:
         print("Startup checks failed. Please resolve the issues above.")
 

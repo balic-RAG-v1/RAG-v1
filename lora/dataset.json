@@ -1,91 +1,17 @@
 [
     {
-        "instruction": "What is the name of the bill that was introduced in the Lok Sabha on December 16, 2025?",
+        "instruction": "What is the three-layer model for PEP screening and rules engine?",
         "input": "",
-        "output": "Sabka Bima Sabki Raksha (Amendment of Insurance Laws) Bill, 2025"
+        "output": "The three-layer model separates compliance data management, business rule logic, and screening algorithms."
     },
     {
-        "instruction": "When did the Act receive President's assent?",
+        "instruction": "Who owns the PEP master list?",
         "input": "",
-        "output": "20 December 2025"
+        "output": "The Compliance Team maintains the authoritative PEP list with periodic updates."
     },
     {
-        "instruction": "What is the current FDI cap in India's insurance sector?",
+        "instruction": "What is the purpose of Layer 1: Reference Data?",
         "input": "",
-        "output": "74 per cent"
-    },
-    {
-        "instruction": "How much will be the increased FDI limit in Indian Insurance companies after the Act comes into effect?",
-        "input": "",
-        "output": "100 per cent of the paid-up equity capital"
-    },
-    {
-        "instruction": "What is the title of the Sabka Bima Sabki Raksha (Amendment of Insurance Laws) Act, 2025?",
-        "input": "Sabka Bima Sabki Raksha (Amendment of Insurance Laws) Act, 2025",
-        "output": "The Sabka Bima Sabki Raksha (Amendment of Insurance Laws) Act, 2025"
-    },
-    {
-        "instruction": "When will the Sabka Bima Sabki Raksha (Amendment of Insurance Laws) Act, 2025 come into force?",
-        "input": "",
-        "output": "The Central Government may appoint a date for its coming into force by notification in the Official Gazette"
-    },
-    {
-        "instruction": "What is the class of insurance business that includes health insurance business?",
-        "input": "",
-        "output": "'health insurance business; or (c) health insurance business'"
-    },
-    {
-        "instruction": "Who will notify the Central Government about the other classes of insurance business?",
-        "input": "",
-        "output": "'the Central Government in consultation with the Authority from time to time'"
-    },
-    {
-        "instruction": "What is the effect of substituting 'insurance intermediary' for 'intermediary or insurance intermediary'?",
-        "input": "",
-        "output": "It will result in the use of 'it or its' instead of 'he, him, or his'"
-    },
-    {
-        "instruction": "What are the three layers of the PEP Screening & Rules Engine?",
-        "input": "",
-        "output": "The three-layer model enables regulatory agility, business flexibility, and operational scalability without triggering software releases for policy changes."
-    },
-    {
-        "instruction": "Who owns the PEP list and what is its purpose?",
-        "input": "",
-        "output": "The Compliance Team maintains authoritative PEP lists with periodic updates."
-    },
-    {
-        "instruction": "What are the three layers of the PEP Screening & Rules Engine?",
-        "input": "",
-        "output": [
-            "Layer 1: Reference Data (PEP Master Database)",
-            "Layer 2: Screening Logic (Match Rules & Algorithms)",
-            "Layer 3: Business Rules (Decision & Journey Logic)"
-        ]
-    },
-    {
-        "instruction": "How often does the PEP list need to be updated?",
-        "input": "",
-        "output": "PEP lists change daily; code should not cascade into business logic."
-    },
-    {
-        "instruction": "What is the purpose of the Rule Change Code review and testing process?",
-        "input": "",
-        "output": "Rule changes do not trigger software releases; no-code authoring + approval"
-    },
-    {
-        "instruction": "What is the primary goal of the Low-Level Design (LLD) document?",
-        "input": "",
-        "output": "The primary goal is to translate the approved High-Level Design into engineering specifications suitable for direct implementation by development teams."
-    },
-    {
-        "instruction": "What are some key deliverables included in the LLD document?",
-        "input": "component-wise architecture, API contracts, logical data models, and more",
-        "output": "The document provides detailed technical specifications for 11 core components, comprehensive API contracts, logical data models with indexes, security architecture, performance optimization strategies, and extensibility patterns."
-    },
-    {
-        "instruction": "What is the target audience for this LLD document?",
-        "input": "",
-        "output": "The target audience includes engineering teams, security reviewers, compliance validators, product managers"
+        "output": "Layer 1 stores con configurable reference data, including PEP master database and match logic."
     }
 ]

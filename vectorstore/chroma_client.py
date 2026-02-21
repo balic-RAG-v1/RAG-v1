@@ -36,3 +36,18 @@ def setup_vectorstore(docs_splits, embedding_model, collection_name="rag-chroma-
         print("No new documents to add. All sources already exist.")
         
     return vectorstore
+
+import chromadb
+
+def clear_vectorstore(collection_name="rag-chroma-gradio-docs", persist_directory="./chroma_db"):
+    """
+    Clears the entire Chroma vector store.
+    """
+    try:
+        client = chromadb.PersistentClient(path=persist_directory)
+        client.delete_collection(name=collection_name)
+        print("Vector store collection deleted.")
+        return True, "Vector store cleared."
+    except Exception as e:
+        print(f"Error clearing vector store collection: {e}")
+        return False, f"Error clearing vector store: {str(e)}"
